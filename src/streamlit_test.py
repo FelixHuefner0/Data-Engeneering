@@ -65,9 +65,8 @@ events = pd.concat([
         "hour": tmp_end["end_hour"],
         "delta": 1
     })
-], ignore_index=True)# .dropna(subset=["station_id", "hour"]) delets events happening in the same station and same hour
+], ignore_index=True)
 
-print(events)
 # Aggregation pro (hour, station)
 hourly = (
     events.groupby(["hour", "station_id"], as_index=False)["delta"]
@@ -86,9 +85,6 @@ def test_data():
     print(f"Imbalance hours: {check}")
 # test_data()
 
-
-
-
 # ----------------------------------------------------
 # 4. Streamlit setup & state
 # ----------------------------------------------------
@@ -106,7 +102,7 @@ if "selected_stations" not in st.session_state:
     st.session_state.selected_stations = []
 
 # ----------------------------------------------------
-# 5. Hours / simulation controls
+# 5. Hours / simulation controls + Popup Warning
 # ----------------------------------------------------
 all_hours = sorted(hourly["hour"].unique())
 if not all_hours:
@@ -115,41 +111,170 @@ if not all_hours:
 
 current_hour = all_hours[st.session_state.current_hour_index]
 
+# ⚠️ Popup-Zustand im Session State
+if "show_popup" not in st.session_state:
+    st.session_state.show_popup = False
+if "popup_message" not in st.session_state:
+    st.session_state.popup_message = ""
+
+# Warnlogik
+def check_balance_limits(balances_df):
+    """Check if any station violates the balance limits and prepare formatted popup text."""
+    low = balances_df[balances_df["balance"] < 5]
+    high = balances_df[balances_df["balance"] > 30]
+    if not low.empty or not high.empty:
+        msg_parts = []
+        if not low.empty:
+            msg_parts.append("<h4 class='low'>🚲 Zu wenige Fahrräder:</h4><ul>")
+            for _, row in low.iterrows():
+                msg_parts.append(f"<li class='low'>{row['station_name']} — {int(row['balance'])} Fahrräder</li>")
+            msg_parts.append("</ul>")
+        if not high.empty:
+            msg_parts.append("<h4 class='high'>🚲 Zu viele Fahrräder:</h4><ul>")
+            for _, row in high.iterrows():
+                msg_parts.append(f"<li class='high'>{row['station_name']} — {int(row['balance'])} Fahrräder</li>")
+            msg_parts.append("</ul>")
+        st.session_state.popup_message = "\n".join(msg_parts)
+        st.session_state.show_popup = True
+
+# ----------------------------------------------------
+#  Helper function: Stunden fortschalten + Warnungen prüfen
+# ----------------------------------------------------
+def advance_hours(steps: int):
+    """Advance the simulation by the given number of hours and check for balance warnings."""
+    st.session_state.current_hour_index = min(
+        st.session_state.current_hour_index + steps,
+        len(all_hours) - 1
+    )
+
+    new_hour = all_hours[st.session_state.current_hour_index]
+
+    cum_delta = (
+        hourly[hourly["hour"] <= new_hour]
+        .groupby("station_id")["delta"]
+        .sum()
+        .reindex(all_station_ids, fill_value=0)
+    )
+    adj_series = pd.Series(
+        {sid: st.session_state.adjustments.get(sid, 0) for sid in all_station_ids},
+        index=all_station_ids
+    )
+    balances_series = initial_balance + cum_delta + adj_series
+    balances_df = pd.DataFrame({
+        "station_id": balances_series.index,
+        "balance": balances_series.values
+    }).merge(stations_df, on="station_id", how="left")
+
+    # Check limits (sets show_popup if needed)
+    check_balance_limits(balances_df)
+
+    # always rerun, even if popup appears
+    st.rerun()
+
+
+# Sidebar UI
 st.sidebar.header("⏱️ Time Simulation")
 st.sidebar.write(f"**Current Hour:** {current_hour}")
 colA, colB = st.sidebar.columns(2)
 with colA:
     if st.button("➡️ Next Hour"):
-        st.session_state.current_hour_index = min(
-            st.session_state.current_hour_index + 1, len(all_hours) - 1
-        )
-        st.rerun()
+        advance_hours(1)
 with colB:
     if st.button("⏩ +6 Hours"):
-        st.session_state.current_hour_index = min(
-            st.session_state.current_hour_index + 6, len(all_hours) - 1
-        )
-        st.rerun()
+        advance_hours(6)
 
 st.sidebar.markdown("---")
 if st.sidebar.button("🔄 Reset Simulation"):
     st.session_state.current_hour_index = start_at
     st.session_state.adjustments = {}
     st.session_state.selected_stations = []
+    st.session_state.show_popup = False
+    st.session_state.popup_message = ""
     st.rerun()
+
+# ⚠️ External popup window (not inside Streamlit page)
+if st.session_state.show_popup:
+    # escape backticks & linebreaks for JS string
+    html_message = st.session_state.popup_message.replace("`", "\\`").replace("\n", "")
+    popup_script = f"""
+    <script>
+    // Close any existing popup first
+    if (window.bikePopup && !window.bikePopup.closed) {{
+        window.bikePopup.close();
+    }}
+
+    // Open a new small external window
+    const popupFeatures = "width=700,height=600,left=150,top=150,resizable=yes,scrollbars=yes";
+    window.bikePopup = window.open("", "BikeWarning", popupFeatures);
+
+    const htmlContent = `
+        <html>
+        <head>
+            <meta charset='UTF-8'>
+            <title>Stationswarnung</title>
+            <style>
+                body {{
+                    background-color: #1e1e1e;
+                    color: #f1f1f1;
+                    font-family: sans-serif;
+                    margin: 0;
+                    padding: 30px;
+                    line-height: 1.6;
+                }}
+                h2 {{ color: #ff4b4b; margin-top: 0; }}
+                .low  {{ color: #ff6961; }}
+                .high {{ color: #77dd77; }}
+                .container {{
+                    max-width: 640px;
+                    margin: auto;
+                    background: #2b2b2b;
+                    border-radius: 10px;
+                    padding: 25px;
+                    box-shadow: 0 4px 25px rgba(0,0,0,0.5);
+                }}
+                button {{
+                    background-color: #444;
+                    color: white;
+                    border: none;
+                    padding: 10px 18px;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    margin-top: 20px;
+                    font-size: 15px;
+                }}
+                button:hover {{
+                    background-color: #666;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h2>⚠️ Stationswarnung</h2>
+                <p>Folgende Stationen haben kritische Bestände:</p>
+                {html_message}
+                <button onclick="window.close()">OK, verstanden</button>
+            </div>
+        </body>
+        </html>
+    `;
+
+    window.bikePopup.document.write(htmlContent);
+    window.bikePopup.document.close();
+    </script>
+    """
+    st.components.v1.html(popup_script, height=0)
+    st.session_state.show_popup = False
 
 # ----------------------------------------------------
 # 6. Deterministische Bestände: initial + Σ delta (<= current_hour) + adjustments
 # ----------------------------------------------------
-# Summe der Deltas bis zur aktuellen Stunde
 cum_delta = (
-    hourly[hourly["hour"] <= current_hour] # filtert alle Events bis current_hour
+    hourly[hourly["hour"] <= current_hour]
     .groupby("station_id")["delta"]
     .sum()
-    .reindex(all_station_ids, fill_value=0) # fill missing stations with 0
+    .reindex(all_station_ids, fill_value=0)
 )
 
-# Persistente manuelle Anpassungen
 adj_series = pd.Series(
     {sid: st.session_state.adjustments.get(sid, 0) for sid in all_station_ids},
     index=all_station_ids
@@ -157,11 +282,10 @@ adj_series = pd.Series(
 
 balances_series = initial_balance + cum_delta + adj_series
 
-# Anzeige-DF
 now = pd.DataFrame({
     "station_id": balances_series.index,
     "balance": balances_series.values
-}).merge(stations_df, on="station_id", how="left") # merge in names
+}).merge(stations_df, on="station_id", how="left")
 
 # ----------------------------------------------------
 # 7. Top-10 negatives / positives (side-by-side, click-to-add)
@@ -193,7 +317,7 @@ def clickable_station_table(df, label, color_icon, suffix):
         name = row.station_name
         val = int(row.balance)
         c1, c2, c3 = st.columns([2, 5, 2])
-        key = f"add_{sid}_{suffix}_{current_hour}_{idx}"  # garantiert eindeutig
+        key = f"add_{sid}_{suffix}_{current_hour}_{idx}"
         if c1.button(f"{sid}", key=key):
             clicked.append(sid)
         c2.write(name)
@@ -213,12 +337,10 @@ clicked_ids = set(added_low + added_high)
 st.markdown("---")
 st.subheader("🧰 Manual Adjustments")
 
-# Add clicked stations to selection
 for sid in clicked_ids:
     if sid not in st.session_state.selected_stations:
         st.session_state.selected_stations.append(sid)
 
-# Ensure validity
 valid_ids = set(now["station_id"].unique())
 st.session_state.selected_stations = [sid for sid in st.session_state.selected_stations if sid in valid_ids]
 
@@ -245,12 +367,10 @@ else:
         )
 
     if st.button("✅ Apply Adjustments"):
-        # apply cumulatively to the adjustments dict (not to balances directly)
         for sid, val in adjust_values.items():
             if val != 0:
                 st.session_state.adjustments[sid] = st.session_state.adjustments.get(sid, 0) + int(val)
 
-        # reset UI selections & inputs
         st.session_state.selected_stations = []
         for k in list(st.session_state.keys()):
             if k.startswith("adj_"):

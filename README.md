@@ -126,9 +126,22 @@ mkdir -p data/202507-divvy-tripdata
 streamlit run src/streamlit_test.py
 ```
 
-**7. (Docker deployment - coming soon):**
+**7 Run in a container:**
+
+**7.1 Option 1 - Build with compose :**
+
 ```bash
 docker-compose up --build
+```
+
+**7.1 Option 2 - Build and run manually :**
+
+```bash
+# Build the image
+docker build -t dataengproj -f Dockerfile .
+
+# Run the container
+docker run -it -p 8501:8501 --memory=4g dataengproj
 ```
 
 ### Configuration Parameters

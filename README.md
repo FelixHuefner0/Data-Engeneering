@@ -194,18 +194,20 @@ Data-Engeneering/
 - Connection management
 - Integration contracts
 
-### Sebi (Spark ETL) 🚧 IN PROGRESS
+### Sebi (Spark ETL) ✅ COMPLETE
 - Read trip history CSVs
-- Aggregate to hourly deltas (NYC timezone)
+- Aggregate to hourly deltas (Chicago timezone)
 - Write to `events_hourly` table
 - Maintain station catalog
+- **Implemented in `src/batch_build_stations.py`**
 - **See `SPARK_INTEGRATION.md` for detailed guide**
 
-### Felix (Streamlit Dashboard)
+### Felix (Streamlit Dashboard) ✅ COMPLETE
 - Interactive balance visualization
 - Time simulation controls
 - Manual adjustment interface
 - Warning system for critical levels
+- **Integrated with SQLite database**
 
 ### Oli (Docker & Orchestration)
 - Docker Compose setup
@@ -219,12 +221,12 @@ Data-Engeneering/
 - SQLite schema with 2 core tables
 - Repository pattern for data access
 - Database initialization
-- Spark integration documentation
+- Spark ETL batch pipeline (`src/batch_build_stations.py`)
+- Streamlit dashboard integrated with SQLite
+- Full data pipeline: CSV → Spark → SQLite → Streamlit
 
 🚧 **In Progress**:
-- Spark ETL pipeline (Sebi)
 - Docker containerization (Oli)
-- Streamlit integration with SQLite (Felix)
 
 📋 **Planned**:
 - Per-bike-type analysis UI

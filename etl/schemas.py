@@ -1,4 +1,3 @@
-# NOT USED - Moved to etl/schemas.py
 from pyspark.sql.types import (
     StructType, StructField, StringType, TimestampType, DoubleType
 )

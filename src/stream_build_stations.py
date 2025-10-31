@@ -1,3 +1,4 @@
+# NOT USED - Streaming version, only batch processing implemented
 from pyspark.sql import functions as F
 from pyspark.sql import Window
 from pyspark.sql import DataFrame

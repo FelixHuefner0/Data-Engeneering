@@ -1,89 +1,66 @@
 import streamlit as st
 import pandas as pd
+import sys
 from pathlib import Path
 
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-BASE_DIR = Path(__file__).resolve().parent
-DATA_PATH = BASE_DIR.parent / "data" / "202507-divvy-tripdata" / "202507-divvy-tripdata.csv"
+from database.connection import DatabaseConnection
+from database.repositories import StationRepository, EventsHourlyRepository
+from config.database import DB_PATH, INITIAL_BALANCE
 
 start_at = 16  # just for testing
-initial_balance = 20
+initial_balance = INITIAL_BALANCE
 
 # ----------------------------------------------------
-# 1. Load data
+# 1. Load data from database
 # ----------------------------------------------------
 @st.cache_data
-def load_data(path: Path) -> pd.DataFrame:
-    df = pd.read_csv(path)
-    df["started_at"] = pd.to_datetime(df["started_at"], errors="coerce")
-    df["ended_at"] = pd.to_datetime(df["ended_at"], errors="coerce")
-    df["start_hour"] = df["started_at"].dt.floor("h")
-    df["end_hour"] = df["ended_at"].dt.floor("h")
-    # KEIN Drop beider Seiten gleichzeitig; wir filtern getrennt bei Events
+def load_stations_from_db() -> pd.DataFrame:
+    """Load all stations from database."""
+    db = DatabaseConnection(DB_PATH)
+    with db.get_connection() as conn:
+        station_repo = StationRepository(conn)
+        stations = station_repo.get_all_stations(active_only=True)
+        
+    # Convert to DataFrame
+    stations_data = [dict(row) for row in stations]
+    df = pd.DataFrame(stations_data)
+    
+    # Rename columns to match existing logic
+    df = df.rename(columns={"id": "station_id", "name": "station_name"})
+    return df[["station_id", "station_name"]]
+
+
+@st.cache_data
+def load_hourly_events_from_db() -> pd.DataFrame:
+    """Load all hourly events from database."""
+    db = DatabaseConnection(DB_PATH)
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT hour, station_id, delta_total as delta
+            FROM events_hourly
+            ORDER BY hour, station_id
+        """)
+        events = cursor.fetchall()
+    
+    # Convert to DataFrame
+    events_data = [dict(row) for row in events]
+    df = pd.DataFrame(events_data)
+    
+    # Convert hour to datetime
+    df["hour"] = pd.to_datetime(df["hour"])
+    
     return df
 
-df = load_data(DATA_PATH)
 
-# ----------------------------------------------------
-# 2. Station mapping (unique station_id)
-# ----------------------------------------------------
-stations_df = pd.concat([
-    df[["start_station_id", "start_station_name"]].rename(columns={
-        "start_station_id": "station_id",
-        "start_station_name": "station_name"
-    }),
-    df[["end_station_id", "end_station_name"]].rename(columns={
-        "end_station_id": "station_id",
-        "end_station_name": "station_name"
-    })
-]).dropna(subset=["station_id"]).drop_duplicates(subset=["station_id"])
-
+# Load data from database
+stations_df = load_stations_from_db()
 all_station_ids = stations_df["station_id"].unique()
 
-# ----------------------------------------------------
-# 3. Compute hourly deltas (closed-system event log)
-#    -1 at start station at start_hour, +1 at end station at end_hour
-#    Start/End getrennt behandeln, damit "halbe" Fahrten nicht wegfallen
-# ----------------------------------------------------
-tmp_start = df.dropna(subset=["start_station_id", "start_hour"])
-tmp_end   = df.dropna(subset=["end_station_id", "end_hour"])
-
-# array(['CHI00285', Timestamp('2025-07-05 17:00:00'), -1], dtype=object)
-# array(['CHI00400', Timestamp('2025-07-01 13:00:00'), -1], dtype=object)
-# array(['CHI00420', Timestamp('2025-07-31 16:00:00'), -1], dtype=object) ...
-# shape is half delta -1 half delta +1
-
-
-events = pd.concat([
-    pd.DataFrame({
-        "station_id": tmp_start["start_station_id"],
-        "hour": tmp_start["start_hour"],
-        "delta": -1
-    }),
-    pd.DataFrame({
-        "station_id": tmp_end["end_station_id"],
-        "hour": tmp_end["end_hour"],
-        "delta": 1
-    })
-], ignore_index=True)
-
-# Aggregation pro (hour, station)
-hourly = (
-    events.groupby(["hour", "station_id"], as_index=False)["delta"]
-          .sum()
-          .sort_values(["station_id", "hour"])
-)
-def test_data():
-    print(df["started_at"].isna().sum(), "NaT in started_at")
-    print(df["ended_at"].isna().sum(), "NaT in ended_at")
-    print(df["start_hour"].isna().sum(), "NaT in start_hour")
-    print(df["end_hour"].isna().sum(), "NaT in end_hour")
-    print("Free floating bikes:") # 25$ payment baby
-    print(df["start_station_id"].isna().sum(), "NaN in start_station_id")
-    print(df["end_station_id"].isna().sum(), "NaN in end_station_id")
-    check = (events.groupby("hour")["delta"].sum()).sum()
-    print(f"Imbalance hours: {check}")
-# test_data()
+hourly = load_hourly_events_from_db()
 
 # ----------------------------------------------------
 # 4. Streamlit setup & state
@@ -106,7 +83,7 @@ if "selected_stations" not in st.session_state:
 # ----------------------------------------------------
 all_hours = sorted(hourly["hour"].unique())
 if not all_hours:
-    st.error("No data found.")
+    st.error("No data found in database. Please run the ETL pipeline first: python -m src.batch_build_stations")
     st.stop()
 
 current_hour = all_hours[st.session_state.current_hour_index]

@@ -1,3 +1,4 @@
+# NOT USED - Configured for MongoDB, replaced by batch ETL
 import os
 from dotenv import load_dotenv
 from pyspark.sql import SparkSession

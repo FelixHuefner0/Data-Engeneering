@@ -13,6 +13,10 @@ from config.database import DB_PATH, INITIAL_BALANCE
 start_at = 16  # just for testing
 initial_balance = INITIAL_BALANCE
 
+# Must run before any other Streamlit commands or decorators
+st.set_page_config(page_title="Bike Balance Monitor", layout="wide")
+st.title("🚲 Bike Balances")
+
 # ----------------------------------------------------
 # 1. Load data from database
 # ----------------------------------------------------
@@ -65,9 +69,6 @@ hourly = load_hourly_events_from_db()
 # ----------------------------------------------------
 # 4. Streamlit setup & state
 # ----------------------------------------------------
-st.set_page_config(page_title="Bike Balance Monitor", layout="wide")
-st.title("🚲 Bike Balances")
-
 if "current_hour_index" not in st.session_state:
     st.session_state.current_hour_index = start_at
 

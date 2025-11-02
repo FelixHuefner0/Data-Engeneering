@@ -1,6 +1,6 @@
 # Core dependencies
-pandas>=2.0.0
-streamlit>=1.28.0
+pandas==2.0.0
+streamlit==1.28.0
 
 # Spark ETL
-pyspark>=3.4.0
+pyspark==3.4.0

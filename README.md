@@ -16,8 +16,8 @@ This project builds a comprehensive bike-sharing analytics platform for Divvy (C
 
 **User Stories**:
 - As an **operations manager**, I want to **see which stations will run low on bikes in the next few hours** so that **I can dispatch rebalancing crews proactively**.
-- As a **data analyst**, I want to **view historical balance patterns by station and bike type** so that **I can identify systemic imbalances and optimize station placement**.
 - As a **rebalancing crew member**, I want to **record manual adjustments** so that **the system accurately reflects current inventory**.
+- As an **operations manager**, I want to **get notified if a stations will run low/high on bikes** so that **there is enough time to rebalancing before an over/underflow**.
 
 ## System Architecture and Design
 

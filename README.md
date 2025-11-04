@@ -141,7 +141,7 @@ docker-compose up --build
 docker build -t dataengproj -f Dockerfile .
 
 # Run the container
-docker run -it -p 8501:8501 --memory=4g dataengproj
+docker run -it -p 8501:8501 --memory=12g dataengproj
 ```
 
 ### Configuration Parameters

@@ -147,6 +147,28 @@ def main():
         .schema(ride_schema)
         .csv(csv_pattern)
     )
+
+    #NEW
+    # Strings trimmen, leere Strings -> NULL
+    for c in ["start_station_id", "start_station_name", "end_station_id", "end_station_name", "rideable_type"]:
+        df = df.withColumn(c, F.when(F.length(F.trim(F.col(c))) == 0, None).otherwise(F.trim(F.col(c))))
+
+    #Timestamps robust casten (idempotent, auch wenn schon TimestampType)
+    df = (
+    df.withColumn("started_at", F.to_timestamp("started_at"))
+      .withColumn("ended_at",   F.to_timestamp("ended_at"))
+    )
+
+    #    - gültige Zeitstempel
+    #    - end >= start
+    #    - mind. eine Station (Start ODER Ende) vorhanden
+    df = df.filter(
+        F.col("started_at").isNotNull() &
+        F.col("ended_at").isNotNull() &
+        (F.col("ended_at") >= F.col("started_at")) &
+        (F.col("start_station_id").isNotNull() | F.col("end_station_id").isNotNull())
+    )
+
     
     trip_count = df.count()
     print(f"✓ Loaded {trip_count:,} trips")
@@ -192,3 +214,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

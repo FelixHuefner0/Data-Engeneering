@@ -114,7 +114,7 @@ pip install -r requirements.txt
 
 **4. Download sample data:**
 ```bash
-# Download from https://divvybikes.com/system-data
+# Download from https://divvy-tripdata.s3.amazonaws.com/index.html
 # Extract CSV files to data/tripdata/
 # Example:
 #   data/tripdata/202301-divvy-tripdata.csv
@@ -191,6 +191,7 @@ Data-Engeneering/
 └── README.md                   # This file
 ```
 
+There are more files, but they are not used. Usually marked with # NOT USED on top
 
 ## Limitations and Future Work
 

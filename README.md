@@ -69,7 +69,6 @@ The database uses two core tables (see `database/schema.sql` for full schema):
 **`station`** - Station catalog
 - `id` (TEXT, PK): Station identifier from trip data
 - `name` (TEXT): Station name
-- `lat`, `lon` (REAL): Optional coordinates
 - `capacity` (INTEGER): Total docking capacity (optional)
 - `is_active` (INTEGER): Active status flag
 
@@ -134,15 +133,9 @@ python main.py --skip-etl
 python main.py --etl-only
 ```
 
-**6. Run in a container (optional):**
+**6. Run in a container:**
 
-**Option 1 - Build with compose:**
-
-```bash
-docker-compose up --build
-```
-
-**Option 2 - Build and run manually:**
+**Build and run manually with docker:**
 
 ```bash
 # Build the image

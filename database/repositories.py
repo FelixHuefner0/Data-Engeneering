@@ -15,8 +15,6 @@ class StationRepository:
         self,
         station_id: str,
         name: str,
-        lat: Optional[float] = None,
-        lon: Optional[float] = None,
         capacity: Optional[int] = None,
         is_active: int = 1
     ) -> None:
@@ -26,29 +24,25 @@ class StationRepository:
         Args:
             station_id: Station identifier
             name: Station name
-            lat: Latitude (optional)
-            lon: Longitude (optional)
             capacity: Docking capacity (optional)
             is_active: 1 if active, 0 if inactive
         """
         cursor = self.conn.cursor()
         cursor.execute("""
-            INSERT INTO station (id, name, lat, lon, capacity, is_active, created_at_utc)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO station (id, name, capacity, is_active, created_at_utc)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
-                lat = excluded.lat,
-                lon = excluded.lon,
                 capacity = excluded.capacity,
                 is_active = excluded.is_active
-        """, (station_id, name, lat, lon, capacity, is_active, datetime.utcnow().isoformat()))
+        """, (station_id, name, capacity, is_active, datetime.utcnow().isoformat()))
     
     def upsert_stations_batch(self, stations: List[Dict[str, Any]]) -> int:
         """
         Batch upsert multiple stations.
         
         Args:
-            stations: List of station dicts with keys: id, name, lat, lon, capacity, is_active
+            stations: List of station dicts with keys: id, name, capacity, is_active
             
         Returns:
             Number of stations processed
@@ -60,8 +54,6 @@ class StationRepository:
             (
                 s['id'],
                 s['name'],
-                s.get('lat'),
-                s.get('lon'),
                 s.get('capacity'),
                 s.get('is_active', 1),
                 now_utc
@@ -70,12 +62,10 @@ class StationRepository:
         ]
         
         cursor.executemany("""
-            INSERT INTO station (id, name, lat, lon, capacity, is_active, created_at_utc)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO station (id, name, capacity, is_active, created_at_utc)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
-                lat = excluded.lat,
-                lon = excluded.lon,
                 capacity = excluded.capacity,
                 is_active = excluded.is_active
         """, data)

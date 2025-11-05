@@ -8,8 +8,6 @@
 CREATE TABLE IF NOT EXISTS station (
     id TEXT PRIMARY KEY,                -- Station identifier (from trip CSVs)
     name TEXT NOT NULL,                 -- Station name
-    lat REAL,                           -- Latitude (optional)
-    lon REAL,                           -- Longitude (optional)
     capacity INTEGER,                   -- Total docking capacity (nullable)
     is_active INTEGER DEFAULT 1,        -- 0 = inactive, 1 = active
     created_at_utc TEXT NOT NULL        -- ISO-8601 timestamp when first seen

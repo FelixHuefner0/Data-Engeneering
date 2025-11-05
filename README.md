@@ -1,6 +1,6 @@
 # Bike Sharing Data Platform
 
-**Team:** Felix, Tun, Sebi, Oli  
+**Team:** Felix, Tun, Sebi, Oliver
 **Course:** Data Engineering  
 **Date:** October 2025
 
@@ -35,13 +35,13 @@ This project builds a comprehensive bike-sharing analytics platform for Divvy (C
     │  • Batch     │
     │  • Transform │
     └──────┬───────┘
-          │
-          ▼
-    ┌──────────────┐
-    │   SQLite DB  │
-    │  • Station   │
-    │  • Events    │
-    └──────┬───────┘
+           │
+           ▼
+      ┌──────────────┐
+      │   SQLite DB  │
+      │  • Station   │
+      │  • Events    │
+      └───┬──────────┘
           │
           ▼
     ┌──────────────┐
@@ -64,17 +64,23 @@ This project builds a comprehensive bike-sharing analytics platform for Divvy (C
 
 ### Data Model
 
-**Station Dimension** (from trip data)
-- One record per station with location, capacity, metadata
+The database uses two core tables (see `database/schema.sql` for full schema):
 
-**Events Fact Table** (from Trip Histories)
-- Hourly grain: one row per (hour, station_id)
-- Tracks net change in bikes (+1 arrival, -1 departure)
-- Split by bike type for detailed analysis
+**`station`** - Station catalog
+- `id` (TEXT, PK): Station identifier from trip data
+- `name` (TEXT): Station name
+- `lat`, `lon` (REAL): Optional coordinates
+- `capacity` (INTEGER): Total docking capacity (optional)
+- `is_active` (INTEGER): Active status flag
 
-```
-station (1) ──< events_hourly (*)
-```
+**`events_hourly`** - Hourly aggregated deltas
+- `(hour, station_id)` (TEXT, PK): Composite key
+- `delta_total` (INTEGER): Net change (+1 arrival, -1 departure)
+- `delta_ebike`, `delta_other` (INTEGER): Split by bike type
+- Foreign key to `station.id`
+
+Each record in `events_hourly` references a single station in the `station` table, meaning each station can be associated with multiple hourly event records. SO we have a one-to-many relationship from `station` to `events_hourly`.
+
 
 ## Setup and Deployment
 
@@ -107,34 +113,36 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-**4. Initialize the database:**
+**4. Download sample data:**
 ```bash
-python database/init_db.py
-```
-
-**5. Download sample data:**
-```bash
-# Create data directory
-mkdir -p data/202507-divvy-tripdata
-
 # Download from https://divvybikes.com/system-data
-# Place CSV file in data/202507-divvy-tripdata/
+# Extract CSV files to data/tripdata/
+# Example:
+#   data/tripdata/202301-divvy-tripdata.csv
+#   data/tripdata/202302-divvy-tripdata.csv
 ```
 
-**6. Run Streamlit dashboard:**
+**5. Run the complete pipeline:**
 ```bash
-streamlit run src/streamlit_test.py
+# Full pipeline: initialize DB + run ETL + launch dashboard
+python main.py
+
+# Or skip ETL if data already loaded
+python main.py --skip-etl
+
+# Or run ETL only without launching dashboard
+python main.py --etl-only
 ```
 
-**7 Run in a container:**
+**6. Run in a container (optional):**
 
-**7.1 Option 1 - Build with compose :**
+**Option 1 - Build with compose:**
 
 ```bash
 docker-compose up --build
 ```
 
-**7.1 Option 2 - Build and run manually :**
+**Option 2 - Build and run manually:**
 
 ```bash
 # Build the image
@@ -153,7 +161,7 @@ docker run -it -p 8501:8501 --memory=12g dataengproj
 - `BALANCE_LOW_THRESHOLD`: Warning threshold for low inventory (default: 5)
 - `BALANCE_HIGH_THRESHOLD`: Warning threshold for high inventory (default: 30)
 
-**Spark Integration** (see `SPARK_INTEGRATION.md`):
+**Spark Integration** (see `data/docs/SPARK_INTEGRATION.md`):
 - Batch processing configuration
 - Chicago timezone handling
 - Delta aggregation rules
@@ -162,121 +170,34 @@ docker run -it -p 8501:8501 --memory=12g dataengproj
 
 ```
 Data-Engeneering/
+├── main.py                     # Main entry point (orchestrates pipeline)
 ├── config/                     # Configuration files
 │   ├── __init__.py
 │   └── database.py            # DB settings, constants
-├── database/                   # Database layer (Tun's work)
+├── database/                   # Database layer
 │   ├── __init__.py
 │   ├── connection.py          # Connection management
 │   ├── repositories.py        # Data access layer
 │   ├── schema.sql             # Table definitions
 │   └── init_db.py             # Initialization script
-├── src/                        # Application code
-│   ├── streamlit_test.py      # Streamlit dashboard (Felix)
-│   ├── jupiter.ipynb          # Exploratory analysis
-│   └── main.py                # Entry point placeholder
-├── tests/                      # Unit tests
+├── etl/                        # ETL configuration
 │   ├── __init__.py
-│   └── test_database.py       # Database layer tests
+│   ├── schemas.py             # Spark schema definitions
+│   └── spark_config.py        # Spark session builder
+├── src/                        # Application code
+│   ├── batch_build_stations.py # Spark ETL pipeline
+│   ├── streamlit_test.py      # Streamlit dashboard
+│   └── jupiter.ipynb          # Exploratory analysis
 ├── data/                       # Data files (gitignored)
 │   ├── app.db                 # SQLite database
-│   └── 202507-divvy-tripdata/ # Trip CSVs
-├── SPARK_INTEGRATION.md        # Guide for Spark developer
+│   ├── tripdata/              # Trip CSVs
+│   └── docs/                  # Documentation
+│       └── SPARK_INTEGRATION.md
 ├── requirements.txt            # Python dependencies
+├── HowToRun.md                # Quick start guide
 └── README.md                   # This file
 ```
 
-## Team Responsibilities
-
-### Tun (SQLite Layer) ✅ COMPLETE
-- Database schema design
-- Repository pattern implementation
-- Connection management
-- Integration contracts
-
-### Sebi (Spark ETL) ✅ COMPLETE
-- Read trip history CSVs
-- Aggregate to hourly deltas (Chicago timezone)
-- Write to `events_hourly` table
-- Maintain station catalog
-- **Implemented in `src/batch_build_stations.py`**
-- **See `SPARK_INTEGRATION.md` for detailed guide**
-
-### Felix (Streamlit Dashboard) ✅ COMPLETE
-- Interactive balance visualization
-- Time simulation controls
-- Manual adjustment interface
-- Warning system for critical levels
-- **Integrated with SQLite database**
-
-### Oli (Docker & Orchestration) ✅ COMPLETE
-- Docker Compose setup
-- Shared volume for `/data/app.db`
-- Health checks
-- Service coordination
-
-## Current Status
-
-✅ **Complete**:
-- SQLite schema with 2 core tables
-- Repository pattern for data access
-- Database initialization
-- Spark ETL batch pipeline (`src/batch_build_stations.py`)
-- Streamlit dashboard integrated with SQLite
-- Full data pipeline: CSV → Spark → SQLite → Streamlit
-
-✅ **Complete**:
-- Docker containerization (Oli)
-
-📋 **Planned**:
-- Per-bike-type analysis UI
-- Historical trend visualization
-- Kubernetes deployment
-
-## Development Workflow
-
-**For Database Changes** (Tun):
-1. Update `database/schema.sql`
-2. Add migration script to `database/migrations/`
-3. Update repositories as needed
-4. Run tests: `pytest tests/test_database.py -v`
-
-**For Spark Integration** (Sebi):
-1. Follow `SPARK_INTEGRATION.md`
-2. Use repository classes for all writes
-3. Test with small dataset first
-4. Coordinate timezone handling with Tun
-
-**For Frontend** (Felix):
-1. Import from `database.repositories`
-2. Use `EventsHourlyRepository.get_all_balances_at_hour()` for current UI
-3. Add new queries as methods to repositories
-
-## Testing
-
-Run unit tests:
-```bash
-# All tests
-pytest -v
-
-# Database tests only
-pytest tests/test_database.py -v
-
-# With coverage
-pytest --cov=database --cov-report=html
-```
-
-## Data Contracts
-
-**Timezone Convention**: All hourly timestamps in `events_hourly.hour` are **America/Chicago local time** (Central Time), format: `YYYY-MM-DD HH:00:00`
-
-**Rideable Types**: 
-- `electric_bike` → `delta_ebike`
-- `classic_bike` / `docked_bike` → `delta_other`
-
-**Upsert Behavior**:
-- `station`: Key on `id` (updates name/location)
-- `events_hourly`: Key on `(hour, station_id)` (supports reprocessing)
 
 ## Limitations and Future Work
 
@@ -296,15 +217,4 @@ pytest --cov=database --cov-report=html
 
 ## Conclusion
 
-This project demonstrates a modern data engineering pipeline that transforms raw bike-sharing data into actionable operational insights. By separating concerns (Spark for compute, SQLite for serving, Streamlit for presentation) and establishing clear data contracts, the team can work independently while maintaining system integrity. The foundation is scalable - the same architecture will support the transition to Postgres, Kafka, and Kubernetes as volume grows. Most importantly, it solves a real business problem: helping operations teams keep bikes available where and when customers need them.
-
-## License
-
-Educational project for Data Engineering course.
-
-## Contributors
-
-- **Felix Huefner** - Frontend & Visualization
-- **Tun Keltesz** - Database & Storage
-- **Sebi** - Spark ETL
-- **Oli** - DevOps & Orchestration
+This project demonstrates a data engineering pipeline that transforms raw bike-sharing data into actionable operational insights. By separating concerns (Spark for compute, SQLite for serving, Streamlit for presentation) and establishing clear data contracts, the team can work independently while maintaining system integrity. The foundation is scalable - the same architecture would support the transition to Postgres, Kafka, and Kubernetes as volume grows. Most importantly, it actually solves a real business problem: helping operations teams keep bikes available where and when customers need them.
